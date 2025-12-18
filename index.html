@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>オセロ（COM対戦）</title>
+  <style>
+    :root{
+      --bg:#0b1020;
+      --panel:#121a33;
+      --panel2:#0f1730;
+      --text:#e9eefc;
+      --muted:#a7b2d9;
+      --accent:#5eead4;
+      --danger:#fb7185;
+      --border:rgba(255,255,255,.12);
+      --shadow:0 16px 40px rgba(0,0,0,.35);
+      --green1:#0f7a4a;
+      --green2:#0b5f3a;
+      --hint:rgba(94,234,212,.55);
+      --hint2:rgba(255,255,255,.22);
+      --cell:64px;
+    }
+
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+      background: radial-gradient(1200px 800px at 20% 0%, rgba(94,234,212,.14), transparent 55%),
+                  radial-gradient(1000px 700px at 80% 15%, rgba(99,102,241,.16), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+      min-height:100svh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+    }
+
+    .app{
+      width:min(980px, 100%);
+      display:grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap:18px;
+    }
+
+    @media (max-width: 900px){
+      .app{grid-template-columns:1fr; }
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border:1px solid var(--border);
+      border-radius:18px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+
+    .header{
+      padding:18px 18px 12px;
+      display:flex;
+      gap:12px;
+      align-items:flex-start;
+      justify-content:space-between;
+    }
+
+    .title{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .title h1{
+      margin:0;
+      font-size:18px;
+      letter-spacing:.2px;
+    }
+    .title p{
+      margin:0;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.5;
+    }
+
+    .controls{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    button{
+      appearance:none;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:600;
+      font-size:13px;
+      transition:.15s transform, .15s background, .15s border;
+      user-select:none;
+    }
+    button:hover{ background:rgba(255,255,255,.10); }
+    button:active{ transform: translateY(1px); }
+    button.primary{
+      border-color: rgba(94,234,212,.35);
+      background: rgba(94,234,212,.10);
+    }
+    button.primary:hover{ background: rgba(94,234,212,.14); }
+    button.danger{
+      border-color: rgba(251,113,133,.35);
+      background: rgba(251,113,133,.10);
+    }
+    button.danger:hover{ background: rgba(251,113,133,.14); }
+
+    .board-wrap{
+      padding:16px 18px 18px;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+
+    .board{
+      width: calc(var(--cell) * 8);
+      max-width: 100%;
+      aspect-ratio:1/1;
+      display:grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap:10px;
+      margin:0 auto;
+      padding:14px;
+      background: linear-gradient(180deg, rgba(0,0,0,.20), rgba(0,0,0,.35));
+      border:1px solid var(--border);
+      border-radius:18px;
+    }
+
+    .cell{
+      position:relative;
+      border-radius:14px;
+      background: radial-gradient(90% 90% at 30% 25%, var(--green1), var(--green2));
+      border:1px solid rgba(255,255,255,.14);
+      overflow:hidden;
+      cursor:pointer;
+      transition: .12s transform, .12s filter, .12s border;
+      min-height: 0;
+    }
+    .cell:hover{
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+      border-color: rgba(94,234,212,.30);
+    }
+    .cell.disabled{
+      cursor:not-allowed;
+      opacity:.9;
+    }
+    .cell::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      background: radial-gradient(140% 120% at 20% 15%, rgba(255,255,255,.16), transparent 40%);
+      pointer-events:none;
+      opacity:.8;
+    }
+
+    .disc{
+      position:absolute;
+      inset:10px;
+      border-radius:999px;
+      box-shadow: 0 10px 18px rgba(0,0,0,.35);
+      transform: scale(.98);
+      transition:.18s transform;
+    }
+    .disc.black{
+      background: radial-gradient(120% 120% at 35% 30%, #2a2f3a, #05070c);
+      border:1px solid rgba(255,255,255,.14);
+    }
+    .disc.white{
+      background: radial-gradient(120% 120% at 35% 30%, #ffffff, #cbd5e1);
+      border:1px solid rgba(0,0,0,.12);
+    }
+
+    .hint{
+      position:absolute;
+      inset:12px;
+      border-radius:999px;
+      border:2px dashed var(--hint);
+      background: radial-gradient(120% 120% at 35% 30%, rgba(94,234,212,.16), rgba(94,234,212,.02));
+      box-shadow: inset 0 0 0 2px rgba(0,0,0,.05);
+      pointer-events:none;
+    }
+
+    .flip{
+      animation: pop .22s ease-out;
+    }
+    @keyframes pop{
+      from{ transform: scale(.7); opacity:.6; }
+      to{ transform: scale(.98); opacity:1; }
+    }
+
+    .side{
+      padding:18px;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+
+    .stat{
+      background: rgba(0,0,0,.18);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:14px;
+    }
+    .row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      margin:8px 0;
+      color:var(--muted);
+      font-size:13px;
+    }
+    .row strong{
+      color:var(--text);
+      font-size:14px;
+    }
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      font-size:12px;
+      color:var(--muted);
+    }
+    .dot{
+      width:10px;
+      height:10px;
+      border-radius:999px;
+      display:inline-block;
+    }
+    .dot.black{ background:#0b0f19; border:1px solid rgba(255,255,255,.18); }
+    .dot.white{ background:#f8fafc; border:1px solid rgba(0,0,0,.14); }
+
+    .log{
+      background: rgba(0,0,0,.18);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:12px 14px;
+      min-height:120px;
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.55;
+      overflow:auto;
+      max-height: 220px;
+    }
+    .log b{ color: var(--text); }
+
+    .settings{
+      display:grid;
+      gap:10px;
+    }
+
+    label{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.05);
+      color:var(--muted);
+      font-size:13px;
+    }
+    select, input[type="checkbox"]{
+      accent-color: var(--accent);
+    }
+    select{
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px solid var(--border);
+      background: rgba(0,0,0,.25);
+      color: var(--text);
+      font-weight:600;
+    }
+
+    .footer-note{
+      color: var(--muted);
+      font-size:12px;
+      line-height:1.6;
+      opacity:.9;
+    }
+
+    .toast{
+      position:fixed;
+      left:50%;
+      bottom:20px;
+      transform: translateX(-50%);
+      background: rgba(10,15,30,.92);
+      border:1px solid rgba(255,255,255,.16);
+      color: var(--text);
+      padding:10px 14px;
+      border-radius:999px;
+      box-shadow: 0 20px 40px rgba(0,0,0,.45);
+      font-size:13px;
+      opacity:0;
+      pointer-events:none;
+      transition: .2s opacity, .2s transform;
+    }
+    .toast.show{
+      opacity:1;
+      transform: translateX(-50%) translateY(-4px);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="card">
+      <div class="header">
+        <div class="title">
+          <h1>オセロ（COM対戦）</h1>
+          <p>あなたは <b>黒</b>。置ける場所は点線で表示。対人・ランキングなし。</p>
+        </div>
+        <div class="controls">
+          <button class="primary" id="btnNew">新規ゲーム</button>
+          <button id="btnUndo">1手戻す</button>
+          <button class="danger" id="btnPass">パス</button>
+        </div>
+      </div>
+      <div class="board-wrap">
+        <div class="board" id="board" aria-label="othello board"></div>
+        <div class="footer-note">
+          ※COMは「強すぎない」設定（候補手の軽い評価＋少しランダム）。難易度は右側で調整できます。
+        </div>
+      </div>
+    </section>
+
+    <aside class="card">
+      <div class="side">
+        <div class="stat">
+          <div class="row"><span>手番</span><strong id="turnLabel">-</strong></div>
+          <div class="row"><span>黒（あなた）</span><strong id="blackCount">2</strong></div>
+          <div class="row"><span>白（COM）</span><strong id="whiteCount">2</strong></div>
+          <div class="row"><span>残りマス</span><strong id="emptyCount">60</strong></div>
+          <div class="row">
+            <span>状態</span>
+            <span class="badge" id="statusBadge"><span class="dot black"></span><span>ゲーム中</span></span>
+          </div>
+        </div>
+
+        <div class="settings">
+          <label>
+            COM難易度
+            <select id="difficulty">
+              <option value="easy">やさしい</option>
+              <option value="normal" selected>ふつう</option>
+              <option value="hard">ちょい強</option>
+            </select>
+          </label>
+
+          <label>
+            ヒント表示（置ける場所）
+            <input type="checkbox" id="showHints" checked />
+          </label>
+
+          <label>
+            自動でCOMが打つ
+            <input type="checkbox" id="autoCom" checked />
+          </label>
+        </div>
+
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // --- Othello: 0 empty, 1 black (human), -1 white (COM) ---
+    const SIZE = 8;
+    const EMPTY = 0, BLACK = 1, WHITE = -1;
+
+    const boardEl = document.getElementById("board");
+    const turnLabelEl = document.getElementById("turnLabel");
+    const blackCountEl = document.getElementById("blackCount");
+    const whiteCountEl = document.getElementById("whiteCount");
+    const emptyCountEl = document.getElementById("emptyCount");
+    const statusBadge = document.getElementById("statusBadge");
+    const logEl = document.getElementById("log");
+    const toastEl = document.getElementById("toast");
+
+    const btnNew = document.getElementById("btnNew");
+    const btnUndo = document.getElementById("btnUndo");
+    const btnPass = document.getElementById("btnPass");
+    const difficultyEl = document.getElementById("difficulty");
+    const showHintsEl = document.getElementById("showHints");
+    const autoComEl = document.getElementById("autoCom");
+
+    const DIRS = [
+      [-1,-1],[-1,0],[-1,1],
+      [0,-1],        [0,1],
+      [1,-1], [1,0], [1,1],
+    ];
+
+    let board = makeEmptyBoard();
+    let turn = BLACK; // human starts
+    let gameOver = false;
+    let history = []; // snapshots for undo
+
+    function makeEmptyBoard(){
+      return Array.from({length: SIZE}, () => Array(SIZE).fill(EMPTY));
+    }
+
+    function cloneBoard(b){
+      return b.map(row => row.slice());
+    }
+
+    function inBounds(r,c){
+      return r>=0 && r<SIZE && c>=0 && c<SIZE;
+    }
+
+    function initBoard(){
+      board = makeEmptyBoard();
+      // standard start
+      board[3][3] = WHITE;
+      board[3][4] = BLACK;
+      board[4][3] = BLACK;
+      board[4][4] = WHITE;
+      turn = BLACK;
+      gameOver = false;
+      history = [];
+      logEl.innerHTML = "";
+      addLog("新規ゲーム開始。あなたは <b>黒</b> です。");
+      render();
+      maybeAutoCom();
+    }
+
+    function addLog(html){
+      const time = new Date();
+      const t = time.toLocaleTimeString("ja-JP", {hour:"2-digit", minute:"2-digit"});
+      logEl.innerHTML = `<div>【${t}】${html}</div>` + logEl.innerHTML;
+    }
+
+    function toast(msg){
+      toastEl.textContent = msg;
+      toastEl.classList.add("show");
+      clearTimeout(toastEl._t);
+      toastEl._t = setTimeout(()=>toastEl.classList.remove("show"), 1400);
+    }
+
+    function countDiscs(b=board){
+      let black=0, white=0, empty=0;
+      for(let r=0;r<SIZE;r++){
+        for(let c=0;c<SIZE;c++){
+          if(b[r][c]===BLACK) black++;
+          else if(b[r][c]===WHITE) white++;
+          else empty++;
+        }
+      }
+      return {black, white, empty};
+    }
+
+    function getFlips(b, r, c, player){
+      if(b[r][c] !== EMPTY) return [];
+      const opponent = -player;
+      const flips = [];
+
+      for(const [dr,dc] of DIRS){
+        let rr = r + dr, cc = c + dc;
+        const line = [];
+        while(inBounds(rr,cc) && b[rr][cc] === opponent){
+          line.push([rr,cc]);
+          rr += dr; cc += dc;
+        }
+        if(line.length>0 && inBounds(rr,cc) && b[rr][cc] === player){
+          flips.push(...line);
+        }
+      }
+      return flips;
+    }
+
+    function getValidMoves(b, player){
+      const moves = [];
+      for(let r=0;r<SIZE;r++){
+        for(let c=0;c<SIZE;c++){
+          const flips = getFlips(b,r,c,player);
+          if(flips.length>0) moves.push({r,c,flips});
+        }
+      }
+      return moves;
+    }
+
+    function applyMove(b, move, player){
+      const nb = cloneBoard(b);
+      nb[move.r][move.c] = player;
+      for(const [rr,cc] of move.flips){
+        nb[rr][cc] = player;
+      }
+      return nb;
+    }
+
+    function pushHistory(){
+      history.push({ board: cloneBoard(board), turn, gameOver });
+      if(history.length > 100) history.shift();
+    }
+
+    function tryMove(r,c){
+      if(gameOver) return;
+      if(turn !== BLACK) return;
+
+      const flips = getFlips(board,r,c,turn);
+      if(flips.length===0){
+        toast("そこには置けません");
+        return;
+      }
+
+      pushHistory();
+      board[r][c] = turn;
+      flips.forEach(([rr,cc]) => board[rr][cc] = turn);
+
+      addLog(`あなた（黒）が <b>${posLabel(r,c)}</b> に置きました（反転 ${flips.length}）。`);
+      turn = -turn;
+      render();
+      checkFlowAfterMove();
+    }
+
+    function posLabel(r,c){
+      // A1..H8 (A=col, 1=row)
+      const col = String.fromCharCode("A".charCodeAt(0) + c);
+      const row = (r+1);
+      return `${col}${row}`;
+    }
+
+    function setStatus(text, who){
+      // who: "black"|"white"|"neutral"
+      const dotClass = who==="black" ? "black" : who==="white" ? "white" : "black";
+      const dotColor = who==="white" ? "white" : "black";
+      statusBadge.innerHTML = `<span class="dot ${dotColor}"></span><span>${text}</span>`;
+    }
+
+    function render(){
+      const validMoves = getValidMoves(board, turn);
+      const counts = countDiscs(board);
+
+      blackCountEl.textContent = counts.black;
+      whiteCountEl.textContent = counts.white;
+      emptyCountEl.textContent = counts.empty;
+
+      if(gameOver){
+        const result = getResultText(counts);
+        turnLabelEl.textContent = "終了";
+        setStatus(result, "neutral");
+      }else{
+        turnLabelEl.textContent = (turn===BLACK) ? "あなた（黒）" : "COM（白）";
+        setStatus("ゲーム中", turn===BLACK ? "black" : "white");
+      }
+
+      // build board
+      boardEl.innerHTML = "";
+      const showHints = showHintsEl.checked && !gameOver && turn===BLACK;
+
+      // quick lookup for hints
+      const hintSet = new Set(validMoves.map(m => `${m.r},${m.c}`));
+
+      for(let r=0;r<SIZE;r++){
+        for(let c=0;c<SIZE;c++){
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.setAttribute("data-r", r);
+          cell.setAttribute("data-c", c);
+
+          const v = board[r][c];
+          if(v===BLACK){
+            const d = document.createElement("div");
+            d.className = "disc black flip";
+            cell.appendChild(d);
+          }else if(v===WHITE){
+            const d = document.createElement("div");
+            d.className = "disc white flip";
+            cell.appendChild(d);
+          }else{
+            if(showHints && hintSet.has(`${r},${c}`)){
+              const h = document.createElement("div");
+              h.className = "hint";
+              cell.appendChild(h);
+            }
+          }
+
+          if(gameOver || turn!==BLACK){
+            cell.classList.add("disabled");
+          }else{
+            cell.addEventListener("click", () => tryMove(r,c));
+          }
+
+          boardEl.appendChild(cell);
+        }
+      }
+
+      // pass button state
+      btnPass.disabled = gameOver;
+      btnUndo.disabled = history.length===0;
+    }
+
+    function getResultText(counts){
+      if(counts.black > counts.white) return `あなたの勝ち（${counts.black} - ${counts.white}）`;
+      if(counts.black < counts.white) return `COMの勝ち（${counts.black} - ${counts.white}）`;
+      return `引き分け（${counts.black} - ${counts.white}）`;
+    }
+
+    function checkGameOver(){
+      const blackMoves = getValidMoves(board, BLACK);
+      const whiteMoves = getValidMoves(board, WHITE);
+      if(blackMoves.length===0 && whiteMoves.length===0){
+        gameOver = true;
+        const counts = countDiscs(board);
+        addLog(`<b>ゲーム終了</b>：${getResultText(counts)}`);
+        toast("ゲーム終了");
+        render();
+        return true;
+      }
+      return false;
+    }
+
+    function checkFlowAfterMove(){
+      // if next player has no moves => auto pass
+      if(checkGameOver()) return;
+
+      const moves = getValidMoves(board, turn);
+      if(moves.length === 0){
+        addLog(`<b>パス</b>：${turn===BLACK ? "あなた（黒）" : "COM（白）"} は置ける場所がありません。`);
+        toast("パス");
+        turn = -turn;
+        render();
+      }
+
+      maybeAutoCom();
+    }
+
+    function maybeAutoCom(){
+      if(gameOver) return;
+      if(turn !== WHITE) return;
+      if(!autoComEl.checked) return;
+
+      setTimeout(() => {
+        if(gameOver || turn !== WHITE) return;
+        comMove();
+      }, 380);
+    }
+
+    function comMove(){
+      const moves = getValidMoves(board, WHITE);
+      if(moves.length===0){
+        // handled by flow, but just in case
+        addLog(`<b>パス</b>：COM（白）は置ける場所がありません。`);
+        turn = BLACK;
+        render();
+        return;
+      }
+
+      pushHistory();
+      const picked = pickComMove(moves, difficultyEl.value);
+      board = applyMove(board, picked, WHITE);
+
+      addLog(`COM（白）が <b>${posLabel(picked.r, picked.c)}</b> に置きました（反転 ${picked.flips.length}）。`);
+      turn = BLACK;
+      render();
+      checkFlowAfterMove();
+    }
+
+    function pickComMove(moves, diff){
+      // lightweight heuristic: prefer corners, avoid giving corners, prefer mobility & flips a bit.
+      // then add randomness based on difficulty (easy more random, hard less).
+      const cornerSet = new Set(["0,0","0,7","7,0","7,7"]);
+      const nearCornerSet = new Set([
+        "0,1","1,0","1,1",
+        "0,6","1,7","1,6",
+        "6,0","7,1","6,1",
+        "6,7","7,6","6,6"
+      ]);
+
+      function scoreMove(m){
+        let score = 0;
+
+        const key = `${m.r},${m.c}`;
+        if(cornerSet.has(key)) score += 120;
+        if(nearCornerSet.has(key)) score -= 30;
+
+        // prefer flipping some, but not too greedy
+        score += Math.min(18, m.flips.length) * 2;
+
+        // mobility: after move, how many moves opponent (black) gets? fewer is better
+        const nb = applyMove(board, m, WHITE);
+        const oppMoves = getValidMoves(nb, BLACK).length;
+        const myMoves = getValidMoves(nb, WHITE).length;
+        score += (myMoves * 1.2) - (oppMoves * 1.4);
+
+        // very small preference for edges
+        if(m.r===0 || m.r===7 || m.c===0 || m.c===7) score += 6;
+
+        return score;
+      }
+
+      const scored = moves.map(m => ({m, s: scoreMove(m)})).sort((a,b)=>b.s-a.s);
+
+      // randomness bucket
+      let topK = 3;
+      let noise = 10;
+
+      if(diff==="easy"){ topK = Math.min(6, scored.length); noise = 22; }
+      if(diff==="normal"){ topK = Math.min(4, scored.length); noise = 14; }
+      if(diff==="hard"){ topK = Math.min(2, scored.length); noise = 6; }
+
+      // choose from topK with slight noise
+      const candidates = scored.slice(0, topK).map(x => ({
+        m: x.m,
+        s: x.s + (Math.random()*2-1)*noise
+      })).sort((a,b)=>b.s-a.s);
+
+      return candidates[0].m;
+    }
+
+    // --- UI actions ---
+    btnNew.addEventListener("click", () => initBoard());
+
+    btnUndo.addEventListener("click", () => {
+      if(history.length===0) return;
+      const prev = history.pop();
+      board = cloneBoard(prev.board);
+      turn = prev.turn;
+      gameOver = prev.gameOver;
+      addLog("1手戻しました。");
+      toast("1手戻す");
+      render();
+      maybeAutoCom();
+    });
+
+    btnPass.addEventListener("click", () => {
+      if(gameOver) return;
+      const moves = getValidMoves(board, turn);
+      if(moves.length>0){
+        toast("置ける場所があります");
+        addLog(`<b>パス失敗</b>：置ける場所があるためパスできません。`);
+        return;
+      }
+      pushHistory();
+      addLog(`<b>パス</b>：${turn===BLACK ? "あなた（黒）" : "COM（白）"} がパスしました。`);
+      turn = -turn;
+      render();
+      checkFlowAfterMove();
+    });
+
+    difficultyEl.addEventListener("change", () => {
+      toast(`難易度：${difficultyEl.options[difficultyEl.selectedIndex].text}`);
+      addLog(`難易度を「<b>${difficultyEl.options[difficultyEl.selectedIndex].text}</b>」に変更しました。`);
+      maybeAutoCom();
+    });
+
+    showHintsEl.addEventListener("change", () => render());
+    autoComEl.addEventListener("change", () => {
+      render();
+      maybeAutoCom();
+    });
+
+    // start
+    initBoard();
+  </script>
+</body>
+</html>
